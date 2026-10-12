@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Printstapel">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Printstapel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<style>
+/* Layout: één lange stapel bestanden met paginakaartjes in een raster, vaste actiebalk onderin zoals het bedieningspaneel van een kopieerapparaat */
+:root{
+  --paper:#f3f4f0; --sheet:#ffffff; --ink:#1b1f1d; --muted:#5b6560; --line:#d6dbd5;
+  --accent:#00818a; --accent-ink:#ffffff; --accent-soft:#d8eeee; --warn:#b4471f;
+  --font-display:"Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-body:"Atkinson Hyperlegible", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){ :root{
+  --paper:#111514; --sheet:#1b201f; --ink:#e7ece9; --muted:#97a19c; --line:#2d3532;
+  --accent:#36b8bf; --accent-ink:#03201f; --accent-soft:#163536; --warn:#f08a5d; color-scheme:dark } }
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:16px/1.45 var(--font-body);
+  padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));
+  -webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 160px}
+
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px 20px;margin-bottom:18px}
+h1{font:800 clamp(28px,4vw,40px)/1 var(--font-display);margin:0;letter-spacing:-.02em}
+h1 small{display:block;font:400 15px/1.4 var(--font-body);color:var(--muted);letter-spacing:0;margin-top:6px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+.btn{border:1.5px solid var(--line);background:var(--sheet);border-radius:10px;padding:9px 14px;min-height:44px;font-weight:700}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--warn)}
+.btn:disabled{opacity:.45;cursor:default}
+
+.default{display:flex;align-items:center;gap:8px;background:var(--sheet);border:1.5px solid var(--line);border-radius:10px;padding:4px 6px 4px 12px;min-height:44px}
+.default label{font-size:14px;color:var(--muted)}
+.num{width:64px;text-align:center;border:1.5px solid var(--line);border-radius:8px;padding:6px 4px;background:var(--paper);font-weight:700;font-variant-numeric:tabular-nums}
+
+.drop{display:grid;place-items:center;text-align:center;gap:10px;border:2px dashed var(--line);border-radius:16px;padding:56px 20px;background:var(--sheet)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop h2{font:800 24px/1.15 var(--font-display);margin:0}
+.drop p{margin:0;color:var(--muted);max-width:46ch}
+
+.file{margin-top:22px}
+.filehead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding-bottom:10px;border-bottom:1.5px solid var(--line);margin-bottom:12px}
+.filehead h3{font:600 18px/1.25 var(--font-display);margin:0;flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+.filehead .meta{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+.filehead .acts{display:flex;gap:6px;flex-wrap:wrap}
+.mini{border:1.5px solid var(--line);background:var(--sheet);border-radius:8px;min-width:44px;min-height:40px;padding:4px 10px;font-weight:700;font-size:14px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.tile{position:relative;display:flex;flex-direction:column;gap:6px}
+.thumb{position:relative;display:block;width:100%;padding:0;border:3px solid transparent;border-radius:10px;background:transparent;line-height:0}
+.thumb .pg{position:relative;width:100%;aspect-ratio:210/297;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.18);display:grid;place-items:center}
+.thumb canvas,.thumb img{max-width:100%;max-height:100%;display:block}
+.thumb .pg::after{content:"";position:absolute;inset:0;background:var(--paper);opacity:.45;transition:opacity .15s}
+.tile.sel .thumb{border-color:var(--accent)}
+.tile.sel .thumb .pg::after{opacity:0}
+.loading{font:400 13px/1 var(--font-body);color:#888}
+.stamp{position:absolute;top:8px;left:8px;z-index:2;min-width:38px;height:38px;padding:0 8px;border-radius:19px;background:var(--accent);color:var(--accent-ink);
+  display:none;place-items:center;font:800 18px/1 var(--font-display);font-variant-numeric:tabular-nums;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.tile.sel .stamp{display:grid}
+.zoom{position:absolute;top:8px;right:8px;z-index:2;width:40px;height:40px;border-radius:20px;border:0;background:rgba(20,24,22,.72);color:#fff;display:grid;place-items:center}
+.zoom svg{width:20px;height:20px}
+.tfoot{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:44px}
+.tfoot .lbl{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.step{display:none;align-items:center;gap:4px}
+.tile.sel .step{display:flex}
+.step button{width:40px;height:40px;border-radius:10px;border:1.5px solid var(--line);background:var(--sheet);font:800 20px/1 var(--font-display)}
+.step .num{width:52px;height:40px}
+
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--sheet);border-top:1.5px solid var(--line);
+  padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.bar .in{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.sum{flex:1 1 200px;min-width:0}
+.sum b{font:800 22px/1.1 var(--font-display);font-variant-numeric:tabular-nums}
+.sum span{display:block;color:var(--muted);font-size:14px}
+.seg{display:flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 12px;min-height:44px;font-size:14px;line-height:1.15;text-align:left}
+.seg button small{display:block;color:var(--muted);font-size:12px;letter-spacing:.06em}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);font-weight:700}
+.result{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.result a.btn{text-decoration:none;display:inline-flex;align-items:center}
+.note{font-size:13px;color:var(--muted);flex-basis:100%}
+.err{color:var(--warn);font-size:14px;margin:8px 0 0}
+
+.overlay{position:fixed;inset:0;z-index:20;background:rgba(10,12,11,.86);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.overlay .big{max-width:100%;max-height:calc(100% - 64px);overflow:auto;background:#fff;border-radius:6px}
+.overlay .big canvas,.overlay .big img{display:block;max-width:100%;height:auto}
+.overlay .row{display:flex;gap:8px}
+.overlay .btn{background:#fff;color:#111;border-color:#fff}
+.overlay .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Printstapel<small>Kies de pagina's die je wilt, zet er een aantal bij en print alles in één keer.</small></h1>
+    <div class="tools">
+      <div class="default">
+        <label for="defCount">Standaard aantal</label>
+        <input id="defCount" class="num" type="number" inputmode="numeric" min="1" max="999" value="1">
+        <button id="applyAll" class="mini" type="button">Op alles</button>
+      </div>
+      <button id="addBtn" class="btn primary" type="button">+ Bestanden</button>
+      <button id="clearBtn" class="btn ghost danger" type="button" hidden>Alles wissen</button>
+    </div>
+  </header>
+
+  <input id="fileInput" type="file" accept="application/pdf,.pdf,image/*" multiple hidden>
+
+  <div id="drop" class="drop">
+    <h2>Zet je werkbladen hier</h2>
+    <p>Kies PDF's (bijvoorbeeld van Snappet) of foto's. Je ziet daarna alle pagina's los. Tik een pagina aan om hem mee te printen.</p>
+    <button id="addBtn2" class="btn primary" type="button">Bestanden kiezen</button>
+  </div>
+  <div id="files"></div>
+  <p id="errors" class="err" hidden></p>
+</div>
+
+<div class="bar">
+  <div class="in">
+    <div class="sum"><b id="sumPages">0 pagina's</b><span id="sumSheets">Nog niets gekozen</span></div>
+    <div class="seg" role="group" aria-label="Volgorde">
+      <button id="modePage" type="button" aria-pressed="true">Per pagina<small>A A A B B B</small></button>
+      <button id="modeSet" type="button" aria-pressed="false">Per set<small>A B A B A B</small></button>
+    </div>
+    <button id="buildBtn" class="btn primary" type="button" disabled>Maak printbestand</button>
+    <div id="result" class="result" hidden>
+      <a id="openLink" class="btn primary" href="#" target="_blank" rel="noopener">Open en print</a>
+      <button id="shareBtn" class="btn" type="button" hidden>Deel…</button>
+      <a id="saveLink" class="btn" href="#" download>Bewaar</a>
+    </div>
+    <div id="note" class="note" hidden></div>
+  </div>
+</div>
+
+<div id="overlay" class="overlay" hidden>
+  <div id="big" class="big"></div>
+  <div class="row">
+    <button id="ovToggle" class="btn primary" type="button">Kies deze</button>
+    <button id="ovClose" class="btn" type="button">Sluiten</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script>
+(() => {
+  const WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER;
+  // Worker als blob laden, zodat het ook werkt als de pagina lokaal geopend wordt
+  const workerReady = fetch(WORKER).then(r => r.text()).then(t => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([t], {type:'text/javascript'}));
+  }).catch(() => {});
+
+  const $ = id => document.getElementById(id);
+  const files = [];
+  let uid = 0, mode = 'page', resultUrl = null, renderChain = Promise.resolve();
+
+  const store = {
+    get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
+    set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+  };
+  $('defCount').value = store.get('ps-default', '1');
+  mode = store.get('ps-mode', 'page');
+
+  const clampCount = v => Math.max(1, Math.min(999, parseInt(v, 10) || 1));
+  const defCount = () => clampCount($('defCount').value);
+
+  // ---------- bestanden toevoegen ----------
+  const pick = () => $('fileInput').click();
+  $('addBtn').onclick = pick; $('addBtn2').onclick = pick;
+  $('fileInput').onchange = e => { addFiles([...e.target.files]); e.target.value = ''; };
+  const drop = $('drop');
+  ['dragenter','dragover'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  document.addEventListener('drop', e => { if (e.dataTransfer?.files?.length) addFiles([...e.dataTransfer.files]); });
+
+  function showError(msg){ const el = $('errors'); el.hidden = false; el.textContent = (el.textContent ? el.textContent + ' ' : '') + msg; }
+
+  async function addFiles(list){
+    $('errors').hidden = true; $('errors').textContent = '';
+    for (const f of list){
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      const isImg = f.type.startsWith('image/') || /\.(jpe?g|png|heic|heif|webp|gif)$/i.test(f.name);
+      if (!isPdf && !isImg){ showError(`${f.name} is geen PDF of foto en is overgeslagen.`); continue; }
+      try{
+        const bytes = await f.arrayBuffer();
+        const file = { id: ++uid, name: f.name, kind: isPdf ? 'pdf' : 'image', bytes, pages: [] };
+        if (isPdf){
+          await workerReady;
+          file.doc = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+          for (let i = 0; i < file.doc.numPages; i++) file.pages.push({ idx: i, sel: false, count: defCount() });
+        } else {
+          file.url = URL.createObjectURL(f);
+          file.pages.push({ idx: 0, sel: false, count: defCount() });
+        }
+        if (file.pages.length === 1) file.pages[0].sel = true;
+        files.push(file);
+        renderFile(file);
+      }catch(err){
+        showError(`${f.name} kon niet geopend worden.`);
+      }
+    }
+    changed();
+  }
+
+  // ---------- weergave ----------
+  const zoomIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>';
+
+  function renderFile(file){
+    const sec = document.createElement('section');
+    sec.className = 'file'; sec.id = 'f' + file.id;
+    sec.innerHTML = `
+      <div class="filehead">
+        <h3></h3>
+        <span class="meta"></span>
+        <div class="acts">
+          <button class="mini" data-a="all" type="button">Alles</button>
+          <button class="mini" data-a="none" type="button">Geen</button>
+          <button class="mini" data-a="up" type="button" aria-label="Omhoog">↑</button>
+          <button class="mini" data-a="down" type="button" aria-label="Omlaag">↓</button>
+          <button class="mini" data-a="del" type="button" aria-label="Verwijder bestand">✕</button>
+        </div>
+      </div>
+      <div class="grid"></div>`;
+    sec.querySelector('h3').textContent = file.name.replace(/\.[^.]+$/, '');
+    sec.querySelector('.acts').onclick = e => {
+      const a = e.target.closest('button')?.dataset.a; if (!a) return;
+      if (a === 'all' || a === 'none'){ file.pages.forEach(p => { p.sel = a === 'all'; }); file.pages.forEach(p => updateTile(file, p)); }
+      if (a === 'up' || a === 'down') moveFile(file, a === 'up' ? -1 : 1);
+      if (a === 'del') removeFile(file);
+      changed();
+    };
+    const grid = sec.querySelector('.grid');
+    file.pages.forEach(p => {
+      const t = document.createElement('div');
+      t.className = 'tile'; p.el = t;
+      t.innerHTML = `
+        <button class="thumb" type="button" aria-label="Pagina ${p.idx + 1} kiezen"><span class="pg"><span class="loading">laden…</span></span></button>
+        <span class="stamp"></span>
+        <button class="zoom" type="button" aria-label="Pagina ${p.idx + 1} groot bekijken">${zoomIcon}</button>
+        <div class="tfoot">
+          <span class="lbl">p. ${p.idx + 1}</span>
+          <span class="step">
+            <button type="button" data-d="-1" aria-label="Minder">−</button>
+            <input class="num" type="number" inputmode="numeric" min="1" max="999" aria-label="Aantal">
+            <button type="button" data-d="1" aria-label="Meer">+</button>
+          </span>
+        </div>`;
+      t.querySelector('.thumb').onclick = () => { p.sel = !p.sel; updateTile(file, p); changed(); };
+      t.querySelector('.zoom').onclick = () => openZoom(file, p);
+      t.querySelectorAll('.step button').forEach(b => b.onclick = () => { p.count = clampCount(p.count + +b.dataset.d); updateTile(file, p); changed(); });
+      const inp = t.querySelector('.step input');
+      inp.onchange = () => { p.count = clampCount(inp.value); updateTile(file, p); changed(); };
+      inp.onfocus = () => inp.select();
+      grid.appendChild(t);
+      updateTile(file, p);
+      const slot = t.querySelector('.pg');
+      renderChain = renderChain.then(() => drawPage(file, p.idx, slot, 240)).catch(() => {});
+    });
+    $('files').appendChild(sec);
+  }
+
+  function updateTile(file, p){
+    p.el.classList.toggle('sel', p.sel);
+    p.el.querySelector('.stamp').textContent = '×' + p.count;
+    p.el.querySelector('.step input').value = p.count;
+    p.el.querySelector('.thumb').setAttribute('aria-pressed', p.sel);
+  }
+
+  async function drawPage(file, idx, slot, cssWidth){
+    if (file.kind === 'image'){
+      const img = new Image(); img.src = file.url; img.alt = file.name;
+      try{ await img.decode(); }catch(e){}
+      slot.replaceChildren(img); return;
+    }
+    const page = await file.doc.getPage(idx + 1);
+    const base = page.getViewport({ scale: 1 });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const vp = page.getViewport({ scale: (cssWidth * dpr) / base.width });
+    const c = document.createElement('canvas');
+    c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    slot.replaceChildren(c);
+  }
+
+  function moveFile(file, dir){
+    const i = files.indexOf(file), j = i + dir;
+    if (j < 0 || j >= files.length) return;
+    [files[i], files[j]] = [files[j], files[i]];
+    files.forEach(f => $('files').appendChild($('f' + f.id)));
+  }
+  function removeFile(file){
+    files.splice(files.indexOf(file), 1);
+    $('f' + file.id).remove();
+    if (file.url) URL.revokeObjectURL(file.url);
+    file.doc?.destroy();
+  }
+
+  // ---------- grote weergave ----------
+  let zoomCtx = null;
+  async function openZoom(file, p){
+    zoomCtx = { file, p };
+    const big = $('big'); big.replaceChildren();
+    $('overlay').hidden = false; setOvBtn();
+    const w = Math.min(window.innerWidth - 32, 900);
+    await drawPage(file, p.idx, big, w);
+  }
+  function setOvBtn(){ $('ovToggle').textContent = zoomCtx.p.sel ? 'Niet kiezen' : 'Kies deze'; }
+  $('ovToggle').onclick = () => { const { file, p } = zoomCtx; p.sel = !p.sel; updateTile(file, p); changed(); setOvBtn(); };
+  $('ovClose').onclick = () => { $('overlay').hidden = true; };
+  $('overlay').onclick = e => { if (e.target === $('overlay')) $('overlay').hidden = true; };
+
+  // ---------- instellingen ----------
+  $('defCount').onchange = () => { $('defCount').value = defCount(); store.set('ps-default', defCount()); };
+  $('applyAll').onclick = () => {
+    const n = defCount();
+    files.forEach(f => f.pages.forEach(p => { if (p.sel){ p.count = n; updateTile(f, p); } }));
+    changed();
+  };
+  function setMode(m){ mode = m; store.set('ps-mode', m); $('modePage').setAttribute('aria-pressed', m === 'page'); $('modeSet').setAttribute('aria-pressed', m === 'set'); changed(); }
+  $('modePage').onclick = () => setMode('page'); $('modeSet').onclick = () => setMode('set');
+
+  let clearArmed = null;
+  $('clearBtn').onclick = () => {
+    if (!clearArmed){
+      $('clearBtn').textContent = 'Zeker? Tik nog eens';
+      clearArmed = setTimeout(() => { clearArmed = null; $('clearBtn').textContent = 'Alles wissen'; }, 3000);
+      return;
+    }
+    clearTimeout(clearArmed); clearArmed = null; $('clearBtn').textContent = 'Alles wissen';
+    [...files].forEach(removeFile); changed();
+  };
+
+  // ---------- samenvatting ----------
+  function sequence(file){
+    const sel = file.pages.filter(p => p.sel);
+    const seq = [];
+    if (mode === 'page') sel.forEach(p => { for (let i = 0; i < p.count; i++) seq.push(p.idx); });
+    else {
+      const max = Math.max(0, ...sel.map(p => p.count));
+      for (let r = 0; r < max; r++) sel.forEach(p => { if (p.count > r) seq.push(p.idx); });
+    }
+    return seq;
+  }
+
+  function changed(){
+    const chosen = files.reduce((n, f) => n + f.pages.filter(p => p.sel).length, 0);
+    const total = files.reduce((n, f) => n + f.pages.filter(p => p.sel).reduce((m, p) => m + p.count, 0), 0);
+    $('sumPages').textContent = `${chosen} ${chosen === 1 ? 'pagina' : "pagina's"} gekozen`;
+    $('sumSheets').textContent = total ? `${total} ${total === 1 ? 'kant' : 'kanten'} in het printbestand` : (files.length ? 'Tik pagina\'s aan om ze te kiezen' : 'Nog niets gekozen');
+    $('buildBtn').disabled = total === 0;
+    $('drop').hidden = files.length > 0;
+    $('clearBtn').hidden = files.length === 0;
+    // oude uitkomst klopt niet meer
+    if (resultUrl){ URL.revokeObjectURL(resultUrl); resultUrl = null; }
+    $('result').hidden = true; $('buildBtn').hidden = false; $('note').hidden = true;
+  }
+
+  // ---------- samenvoegen ----------
+  const A4 = [595.28, 841.89];
+
+  async function imageBytes(file){
+    if (/jpe?g$/i.test(file.name) || file.bytes && new Uint8Array(file.bytes.slice(0, 3)).join() === '255,216,255') return { type: 'jpg', bytes: file.bytes };
+    if (new Uint8Array(file.bytes.slice(0, 4)).join() === '137,80,78,71') return { type: 'png', bytes: file.bytes };
+    // andere formaten (zoals HEIC van de iPad) via canvas omzetten naar JPG
+    const img = new Image(); img.src = file.url; await img.decode();
+    const scale = Math.min(1, 3000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+    return { type: 'jpg', bytes: await blob.arrayBuffer() };
+  }
+
+  $('buildBtn').onclick = async () => {
+    const btn = $('buildBtn');
+    btn.disabled = true; btn.textContent = 'Bezig…';
+    const problems = [];
+    try{
+      const { PDFDocument } = PDFLib;
+      const out = await PDFDocument.create();
+      for (const file of files){
+        const seq = sequence(file);
+        if (!seq.length) continue;
+        try{
+          if (file.kind === 'pdf'){
+            const src = await PDFDocument.load(file.bytes, { ignoreEncryption: true });
+            const copied = await out.copyPages(src, seq);   // gedeelde bronnen: bestand blijft klein
+            copied.forEach(pg => out.addPage(pg));
+          } else {
+            const { type, bytes } = await imageBytes(file);
+            const im = type === 'png' ? await out.embedPng(bytes) : await out.embedJpg(bytes);
+            const land = im.width > im.height;
+            const [W, H] = land ? [A4[1], A4[0]] : A4;
+            const m = 18, s = Math.min((W - 2 * m) / im.width, (H - 2 * m) / im.height);
+            const w = im.width * s, h = im.height * s;
+            seq.forEach(() => out.addPage([W, H]).drawImage(im, { x: (W - w) / 2, y: (H - h) / 2, width: w, height: h }));
+          }
+        }catch(err){ problems.push(file.name); }
+      }
+      if (!out.getPageCount()) throw new Error('leeg');
+      const bytes = await out.save();
+      const d = new Date();
+      const name = `printstapel-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.pdf`;
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      resultUrl = URL.createObjectURL(blob);
+      $('openLink').href = resultUrl;
+      $('saveLink').href = resultUrl; $('saveLink').download = name;
+      const pdfFile = new File([blob], name, { type: 'application/pdf' });
+      const canShare = navigator.canShare && navigator.canShare({ files: [pdfFile] });
+      $('shareBtn').hidden = !canShare;
+      $('shareBtn').onclick = () => navigator.share({ files: [pdfFile], title: name }).catch(() => {});
+      btn.hidden = true; $('result').hidden = false;
+      const mb = (bytes.length / 1048576).toFixed(1).replace('.', ',');
+      $('note').hidden = false;
+      $('note').textContent = `${out.getPageCount()} kanten, ${mb} MB. Print je losse werkbladen? Zet dan in het printvenster dubbelzijdig uit.`
+        + (problems.length ? ` Niet gelukt: ${problems.join(', ')}.` : '');
+    }catch(err){
+      $('note').hidden = false;
+      $('note').textContent = 'Het printbestand kon niet gemaakt worden. ' + (problems.length ? `Probleem met: ${problems.join(', ')}.` : 'Probeer het opnieuw met minder bestanden.');
+    }finally{
+      btn.textContent = 'Maak printbestand'; btn.disabled = false;
+    }
+  };
+
+  setMode(mode);
+})();
+</script>
+</body>
+</html>
